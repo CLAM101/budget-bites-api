@@ -1,0 +1,6 @@
+# like gitignore, excludes certain files when creating and updating the image
+
+./node_modules
+Dockerfile
+.dockerignore
+.docker-compose.yml
