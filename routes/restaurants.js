@@ -630,6 +630,9 @@ router.get("/randomorder", async (req, res) => {
 
   // console.log(spendPerHead)
 
+  console.log("request body", req.body);
+  console.log("menu cats", menuCats);
+
   let restOptions = await Restaurant.aggregate([
     {
       $match: {
@@ -642,34 +645,28 @@ router.get("/randomorder", async (req, res) => {
 
   // console.log(restOptions)
 
-  let eligbleRestOptions = [];
+  let eligibleRestOptions = [];
 
-  // filters through restaurant options and spits put options that match the cosen paramaters sent by the client
+  // filters through restaurant options and spits put options that match the chosen paramaters sent by the client
   for (let i = 0; i < restOptions.length; i++) {
     restOptions[i].menu.filter(function checkOptions(option) {
-      // console.log(option)
+      console.log("rest option", option);
 
-      for (let x = 0; x < option.categories.length; x++) {
-        if (
-          option.categories[x] === menuCats[0] ||
-          option.categories[x] === menuCats[1] ||
-          option.categories[x] === menuCats[2] ||
-          option.categories[x] === menuCats[3] ||
-          option.categories[x] === menuCats[4] ||
-          option.categories[x] === menuCats[5] ||
-          option.categories[x] === menuCats[6]
-        ) {
-          eligbleRestOptions.push(restOptions[i]);
+      option.categories.filter((category) => {
+        console.log("category", category);
+
+        if (menuCats.includes(category)) {
+          eligibleRestOptions.push(restOptions[i]);
         }
-      }
+      });
     });
   }
 
-  console.log(eligbleRestOptions);
+  console.log(eligibleRestOptions);
 
   //STORES FULL RESULT OF BOTH RESTURANTS MATCHING USERS CHOSEN CATEGORIES AND menu ITEMS OF THOSE RESTURANTS MATCHING USERS CATEGORIES
   let randomRestOption =
-    eligbleRestOptions[Math.floor(Math.random() * restOptions.length)];
+    eligibleRestOptions[Math.floor(Math.random() * restOptions.length)];
 
   // console.log(randomRestOption.categories)
 
@@ -680,33 +677,28 @@ router.get("/randomorder", async (req, res) => {
 
   // console.log(randomRestOption)
 
-  // LOOPS THROUGH ALL RESTURANT OPTIONS MENUS AND OUTPUTS MENU  ITEMS MATCHING THE USERS CHOSEN CATEGORIES
+  // LOOPS THROUGH ALL RESTAURANT OPTIONS MENUS AND OUTPUTS MENU  ITEMS MATCHING THE USERS CHOSEN CATEGORIES
   await randomRestOption.menu.filter(function checkoptions(option) {
     for (let x = 0; x < option.categories.length; x++) {
       // console.log(option)
-      if (
-        option.categories[x] === menuCats[0] ||
-        option.categories[x] === menuCats[1] ||
-        option.categories[x] === menuCats[2] ||
-        option.categories[x] === menuCats[3] ||
-        option.categories[x] === menuCats[4] ||
-        option.categories[x] === menuCats[5] ||
-        option.categories[x] === menuCats[6]
-      ) {
-        // FILTERS RESULTS BASED ON TOTAL SPEND PER HEAD CHOSEN BY USER
-        if (option.price <= spendPerHead) {
-          menuOptions.push(option);
-        } else if (spendPerHead === undefined) {
-          menuOptions.push(option);
+
+      option.categories.filter((category) => {
+        if (menuCats.includes(category)) {
+          // FILTERS RESULTS BASED ON TOTAL SPEND PER HEAD CHOSEN BY USER
+          if (option.price <= spendPerHead) {
+            menuOptions.push(option);
+          } else if (spendPerHead === undefined) {
+            menuOptions.push(option);
+          }
         }
-      }
+      });
     }
   });
 
   // defines a start time for random order generator to run
   const startingTime = Date.now();
 
-  // defnes how long the generator will run for these two paramater avoid an infinite loop encase there is not enough data to fill the random order result
+  // defnes how long the generator will run for these two paramaters avoid an infinite loop encase there is not enough data to fill the random order result
   const timeTocancel = 4000;
 
   // console.log(menuOptions)
@@ -790,16 +782,8 @@ router.get("/filter", async (req, res) => {
   // LOOPS THROUGH ALL RESTURANT OPTIONS menuS AND OUTPUTS menu ITEMS MATCHING THE USERS CHOSEN CATEGORIES
   for (let i = 0; i < restOptions.length; i++) {
     restOptions[i].menu.filter(function checkOptions(option) {
-      for (let x = 0; x < option.categories.length; x++) {
-        if (
-          option.categories[x] === menuCats[0] ||
-          option.categories[x] === menuCats[1] ||
-          option.categories[x] === menuCats[2] ||
-          option.categories[x] === menuCats[3] ||
-          option.categories[x] === menuCats[4] ||
-          option.categories[x] === menuCats[5] ||
-          option.categories[x] === menuCats[6]
-        ) {
+      option.categories.filter((category) => {
+        if (menuCats.includes(category)) {
           // FILTERS RESULTS BASED ON TOTAL SPEND PER HEAD CHOSEN BY USER
           if (option.price <= spendPerHead) {
             menuOptions.push(option);
@@ -807,14 +791,12 @@ router.get("/filter", async (req, res) => {
             menuOptions.push(option);
           }
         }
-      }
+      });
     });
   }
 
   // console.log(result)
   try {
-    // position 0 == menu option result position 1 == resturant options result
-
     // sends rest options and menue options result back to client
     res.status(201).send({
       menuOptions,
