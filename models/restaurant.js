@@ -7,10 +7,10 @@ const imageSchema = new mongoose.Schema({
 });
 
 const addOnItemArraySchema = new mongoose.Schema({
-  addOnName: {
+  addonname: {
     type: String
   },
-  addOnOptions: [String]
+  addonoptions: [Object]
 });
 
 const sideItemSchema = new mongoose.Schema({
@@ -32,26 +32,27 @@ const sideItemSchema = new mongoose.Schema({
 
 const menuItemSchema = new mongoose.Schema({
   name: {
-    type: String
-    // required: true
+    type: String,
+    required: true
   },
   price: {
-    type: Number
-    //  required: true
+    type: Number,
+    required: true
   },
   description: {
-    type: String
-    // required: true
+    type: String,
+    required: true
   },
   categories: {
-    type: Array
-    // required: true
+    type: Array,
+    required: true
   },
   rating: {
     type: Number
   },
   restaurantname: {
-    type: String
+    type: String,
+    require: true
   },
 
   image: imageSchema,
@@ -59,7 +60,8 @@ const menuItemSchema = new mongoose.Schema({
   relatedSides: [sideItemSchema],
   addons: [addOnItemArraySchema],
   itemType: {
-    type: String
+    type: String,
+    required: true
   }
 });
 
@@ -104,6 +106,7 @@ const restaurantSchema = new mongoose.Schema({
   },
   menu: [menuItemSchema],
   sidesmenu: [sideItemSchema],
+  addonmenu: [addOnItemArraySchema],
   rating: {
     type: String
   },

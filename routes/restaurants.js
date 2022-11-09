@@ -10,6 +10,7 @@ const { trusted } = require("mongoose");
 const storage = require("../helpers/storage");
 const { eventNames } = require("../models/restaurant");
 const Applicant = require("../models/applicant");
+const { toNamespacedPath } = require("path");
 
 // passport strategy for restaurants
 passport.use("restlocal", new LocalStrategy(Restaurant.authenticate()));
@@ -63,59 +64,19 @@ router.get("/getmenu", async function (req, res, next) {
 });
 
 router.post("/addmenuitem", storage, async function (req, res, next) {
+  console.log("request body", req.body, "request user", req.user);
+
   // all new menu item detail from client request
   const {
     name,
     price,
     description,
     categories,
-    //rating,
-    // restaurantname,
-    image,
     imageName,
     relatedSides,
     addons,
     itemType
   } = req.body;
-
-  console.log("request body", req.body, "request user", req.user);
-
-  const imagePath = "http://localhost:3000/images/" + imageName;
-
-  const convertedAddons = JSON.parse(addons);
-  const convertedSides = JSON.parse(relatedSides);
-  const convertedCats = JSON.parse(categories);
-
-  console.log(
-    "addons",
-    convertedAddons,
-    "sides",
-    convertedSides,
-    "categories",
-    convertedCats
-  );
-
-  const imageObject = {
-    name: imageName,
-    imagePath: imagePath
-  };
-
-  console.log("image Object", imageObject);
-
-  const newMenuItem = {
-    name: name,
-    price: price,
-    description: description,
-    categories: convertedCats,
-    rating: 5,
-    restaurantname: req.user.title,
-    image: imageObject,
-    relatedSides: convertedSides,
-    addons: convertedAddons,
-    itemType: itemType
-  };
-
-  //console.log("initial new menu item", newMenuItem);
 
   const rest = await Restaurant.findById(req.user._id, function (err, docs) {
     if (err) {
@@ -126,75 +87,151 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
   }).clone();
 
   const restMenu = rest.menu;
-  //console.log("initial rest menu length", restMenu.length);
   const restSidesMenu = rest.sidesmenu;
   const itemTypes = rest.itemTypes;
-  // console.log("rest item types", itemTypes);
+  const addOnMenu = rest.addonmenu;
 
-  if (itemTypes.length === 0) {
-    itemTypes.push(itemType);
-  } else {
-    itemTypes.filter((option) => {
-      // console.log("option on item types filer", option);
-      if (option !== itemType) {
-        itemTypes.push(itemType);
-      } else {
-        return;
-      }
+  const imagePath = "http://localhost:3000/images/" + imageName;
+
+  //convert addons and sides from string to array
+  const convertedAddons = JSON.parse(addons);
+  const convertedSides = JSON.parse(relatedSides);
+
+  //converts cats object array to array of strings
+  async function convertCats() {
+    let convertedCatsArray = [];
+
+    const catsArray = JSON.parse(categories);
+
+    await catsArray.filter((cat) => {
+      convertedCatsArray.push(cat.category);
     });
+
+    return convertedCatsArray;
   }
 
-  console.log("related sides before filter", relatedSides);
-
-  if (convertedSides && convertedSides.length !== 0) {
-    await convertedSides.filter((option) => {
-      newMenuItem.relatedSides.push(option);
-    });
-  }
-
-  restMenu.push(newMenuItem);
-
-  // console.log(
-  //   "rest menu item based on initial length",
-  //   restMenu[restMenu.length - 1],
-  //   "sides menu",
-  //   rest.sidesmenu
-  // );
-
-  restMenu[restMenu.length - 1].relatedSides.filter((option) => {
-    // console.log("new rest menu entry side on filter", option);
-    function checkDuplicates() {
-      let duplicate = "";
-      let itemName = option.name;
-      // console.log(itemName)
-      for (let i = 0; i < restSidesMenu.length; i++) {
-        if (itemName === restSidesMenu[i].name) {
-          duplicate = "duplicate";
-        }
-        // console.log("loop running")
-      }
-      // console.log(randomOrder)
-      return duplicate;
-    }
-
-    if (checkDuplicates() === "duplicate") {
-    } else {
-      restSidesMenu.push(option);
-    }
-  });
+  const convertedCategories = await convertCats();
 
   console.log(
-    "updated new menu item",
-    newMenuItem,
-    "updated rest menu"
-    //restMenu[12].relatedSides
+    "converted addons",
+    convertedAddons,
+    "converted sides",
+    convertedSides,
+    "converted categories",
+    await convertCats()
   );
 
-  try {
-    const updatedRest = await rest.save();
-    res.status(201).json(updatedRest);
-  } catch (error) {
-    res.status(400).json(error);
+  const imageObject = {
+    name: imageName,
+    imagePath: imagePath
+  };
+
+  console.log("new menu item name", name);
+
+  //checks for if new item conflicts with existing ones
+  async function checkDuplicate() {
+    let result;
+
+    if (restMenu.length !== 0) {
+      restMenu.filter((menuItem) => {
+        console.log("menuitem name in filter", menuItem.name);
+        if (menuItem.name === name) {
+          result = false;
+        } else if (menuItem.name !== name) {
+          result = true;
+        }
+      });
+      console.log("result on check duplicate", result);
+      return result;
+    } else {
+      return true;
+    }
+  }
+
+  // console.log("check duplicate result", checkDuplicate());
+
+  // if no duplicates new menu item is added
+  if (await checkDuplicate()) {
+    const newMenuItem = {
+      name: name,
+      price: price,
+      description: description,
+      categories: convertedCategories,
+      rating: 5,
+      restaurantname: req.user.title,
+      image: imageObject,
+      relatedSides: convertedSides,
+      addons: convertedAddons,
+      itemType: itemType
+    };
+
+    if (!itemTypes.includes(itemType)) {
+      itemTypes.push(itemType);
+    }
+
+    restMenu.push(newMenuItem);
+
+    // checks for duplicate sides before adding them to the main sides menu
+    restMenu[restMenu.length - 1].relatedSides.filter((option) => {
+      function checkDuplicates() {
+        let result;
+        let itemName = option.name;
+
+        for (let i = 0; i < restSidesMenu.length; i++) {
+          if (itemName === restSidesMenu[i].name) {
+            result = true;
+          }
+        }
+
+        return result;
+      }
+
+      if (checkDuplicates()) {
+      } else {
+        restSidesMenu.push(option);
+      }
+    });
+
+    // checks for duplicates in main addons menu and pushes new addons in if duplicates don't exist
+
+    if (addOnMenu.length !== 0) {
+      convertedAddons.filter((addOnItem) => {
+        console.log("add on menu item", addOnItem);
+
+        function checkDuplicates() {
+          let result;
+          let optionName = addOnItem.addonname;
+
+          for (let i = 0; i < addOnMenu.length; i++) {
+            if (optionName === addOnMenu[i].addonname) {
+              result = true;
+            }
+          }
+
+          return result;
+        }
+
+        if (checkDuplicates()) {
+        } else {
+          addOnMenu.push(addOnItem);
+        }
+      });
+    } else {
+      convertedAddons.filter((item) => {
+        addOnMenu.push(item);
+      });
+    }
+
+    try {
+      console.log("restaurant save fired");
+      const updatedRest = await rest.save();
+      res.status(201).json(updatedRest);
+    } catch (error) {
+      res.status(400).json(error);
+    }
+  } else if (!(await checkDuplicate())) {
+    console.log("duplicate else fired");
+    res.status(400).json("Item Already Exists");
   }
 });
 
@@ -277,7 +314,7 @@ router.post("/create-test-order", async (req, res) => {
 
   const rest = await Restaurant.findOne(
     {
-      _id: "6341688be85e95c4a05a9b84"
+      _id: "6364c91125ebbf1d8b8fcb96"
     },
     function (err, docs) {
       if (err) {
@@ -824,7 +861,7 @@ router.get("/", async (req, res) => {
 });
 
 // Getting One
-router.get("/:id", getRestaurant, (req, res) => {
+router.get("/getone", getRestaurant, (req, res) => {
   res.json(res.restaurant);
 });
 
@@ -885,7 +922,7 @@ router.delete("/:id", getRestaurant, async (req, res) => {
 async function getRestaurant(req, res, next) {
   let restaurant;
   try {
-    restaurant = await Restaurant.findById(req.params.id);
+    restaurant = await Restaurant.findById(req.user.id);
     if (restaurant == null) {
       return res.status(404).json({
         message: "cannot find Restaurant"
