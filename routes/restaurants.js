@@ -11,6 +11,7 @@ const storage = require("../helpers/storage");
 const { eventNames } = require("../models/restaurant");
 const Applicant = require("../models/applicant");
 const { toNamespacedPath } = require("path");
+const { constants } = require("buffer");
 
 // passport strategy for restaurants
 passport.use("restlocal", new LocalStrategy(Restaurant.authenticate()));
@@ -64,8 +65,6 @@ router.get("/getmenu", async function (req, res, next) {
 });
 
 router.post("/addmenuitem", storage, async function (req, res, next) {
-  console.log("request body", req.body, "request user", req.user);
-
   // all new menu item detail from client request
   const {
     name,
@@ -78,6 +77,7 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
     itemType
   } = req.body;
 
+  // finds relevant restaurant based on logged in user id
   const rest = await Restaurant.findById(req.user._id, function (err, docs) {
     if (err) {
       console.log(err);
@@ -86,11 +86,7 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
     }
   }).clone();
 
-  const restMenu = rest.menu;
-  const restSidesMenu = rest.sidesmenu;
-  const itemTypes = rest.itemTypes;
-  const addOnMenu = rest.addonmenu;
-
+  const { menu, sidesmenu, itemTypes, addonmenu } = rest;
   const imagePath = "http://localhost:3000/images/" + imageName;
 
   //convert addons and sides from string to array
@@ -98,60 +94,25 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
   const convertedSides = JSON.parse(relatedSides);
 
   //converts cats object array to array of strings
-  async function convertCats() {
-    let convertedCatsArray = [];
-
+  function convertCats() {
     const catsArray = JSON.parse(categories);
-
-    await catsArray.filter((cat) => {
-      convertedCatsArray.push(cat.category);
-    });
-
-    return convertedCatsArray;
+    return catsArray.map((cat) => cat.category);
   }
 
-  const convertedCategories = await convertCats();
-
-  console.log(
-    "converted addons",
-    convertedAddons,
-    "converted sides",
-    convertedSides,
-    "converted categories",
-    await convertCats()
-  );
+  const convertedCategories = convertCats();
 
   const imageObject = {
     name: imageName,
     imagePath: imagePath
   };
 
-  console.log("new menu item name", name);
-
   //checks for if new item conflicts with existing ones
-  async function checkDuplicate() {
-    let result;
-
-    if (restMenu.length !== 0) {
-      restMenu.filter((menuItem) => {
-        console.log("menuitem name in filter", menuItem.name);
-        if (menuItem.name === name) {
-          result = false;
-        } else if (menuItem.name !== name) {
-          result = true;
-        }
-      });
-      console.log("result on check duplicate", result);
-      return result;
-    } else {
-      return true;
-    }
+  function checkDuplicate() {
+    return menu.some((item) => item.name === name);
   }
 
-  // console.log("check duplicate result", checkDuplicate());
-
   // if no duplicates new menu item is added
-  if (await checkDuplicate()) {
+  if (!checkDuplicate()) {
     const newMenuItem = {
       name: name,
       price: price,
@@ -169,57 +130,36 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
       itemTypes.push(itemType);
     }
 
-    restMenu.push(newMenuItem);
+    menu.push(newMenuItem);
 
     // checks for duplicate sides before adding them to the main sides menu
-    restMenu[restMenu.length - 1].relatedSides.filter((option) => {
+    menu[menu.length - 1].relatedSides.filter((option) => {
       function checkDuplicates() {
-        let result;
-        let itemName = option.name;
-
-        for (let i = 0; i < restSidesMenu.length; i++) {
-          if (itemName === restSidesMenu[i].name) {
-            result = true;
-          }
-        }
-
-        return result;
+        return sidesmenu.some((item) => item.name === option.name);
       }
 
       if (checkDuplicates()) {
       } else {
-        restSidesMenu.push(option);
+        sidesmenu.push(option);
       }
     });
 
     // checks for duplicates in main addons menu and pushes new addons in if duplicates don't exist
-
-    if (addOnMenu.length !== 0) {
+    if (addonmenu.length !== 0) {
       convertedAddons.filter((addOnItem) => {
-        console.log("add on menu item", addOnItem);
-
         function checkDuplicates() {
-          let result;
-          let optionName = addOnItem.addonname;
-
-          for (let i = 0; i < addOnMenu.length; i++) {
-            if (optionName === addOnMenu[i].addonname) {
-              result = true;
-            }
-          }
-
-          return result;
+          return addonmenu.some(
+            (item) => item.addonname === addOnItem.addonname
+          );
         }
 
         if (checkDuplicates()) {
         } else {
-          addOnMenu.push(addOnItem);
+          addonmenu.push(addOnItem);
         }
       });
     } else {
-      convertedAddons.filter((item) => {
-        addOnMenu.push(item);
-      });
+      addonmenu.push(...convertedAddons);
     }
 
     try {
@@ -229,8 +169,7 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
     } catch (error) {
       res.status(400).json(error);
     }
-  } else if (!(await checkDuplicate())) {
-    console.log("duplicate else fired");
+  } else if (checkDuplicate()) {
     res.status(400).json("Item Already Exists");
   }
 });
@@ -861,8 +800,32 @@ router.get("/", async (req, res) => {
 });
 
 // Getting One
-router.get("/getone", getRestaurant, (req, res) => {
-  res.json(res.restaurant);
+
+// ive processed the menuitem categories to be one array of strings so that the user can have a dropdown menu of existing menu categoreis, what I could also do is change the model like I have for addons and sides to jsut have a full array of all item categories not sure what would be better to do.
+//I could aslo just process the data on the UI side but not sure if this is best practice
+// the reason ive done this is becausethe restaurants main categories will differ to the individual item categories in their menu
+router.get("/getrestdetail", getRestaurant, (req, res) => {
+  let categories = [];
+  res.restaurant.menu.filter((item) => {
+    item.categories.filter((itemCat) => {
+      if (categories.some((cat) => itemCat === cat)) {
+      } else {
+        categories.push(itemCat);
+      }
+    });
+  });
+
+  const resObject = {
+    addonmenu: res.restaurant.addonmenu,
+    categories: categories,
+    menu: res.restaurant.menu,
+    sidesmenu: res.restaurant.sidesmenu,
+    itemtypes: res.restaurant.itemTypes
+  };
+
+  console.log("mapped categories", categories);
+
+  res.json(resObject);
 });
 
 // Updating One
@@ -1002,5 +965,11 @@ async function checkForOrder(inputs) {
     console.log("catch error", e);
   }
 }
+
+// function checkDuplicates(array, compareItem, ) {
+//   return array.some((item) => {
+//     item.name === option.name;
+//   });
+// }
 
 module.exports = router;
