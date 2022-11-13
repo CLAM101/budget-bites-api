@@ -65,6 +65,12 @@ router.get("/getmenu", async function (req, res, next) {
 });
 
 router.post("/addmenuitem", storage, async function (req, res, next) {
+  console.log(
+    "request body",
+    req.body.relatedSides,
+    "request files",
+    req.files
+  );
   // all new menu item detail from client request
   const {
     name,
@@ -91,28 +97,48 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
 
   //convert addons and sides from string to array
   const convertedAddons = JSON.parse(addons);
-  const convertedSides = JSON.parse(relatedSides);
 
-  //converts cats object array to array of strings
+  //converts cats from string to array of objects to array of strings
   function convertCats() {
     const catsArray = JSON.parse(categories);
     return catsArray.map((cat) => cat.category);
   }
 
+  // converts sides to array of objects the adds ImagePath field and string for each side
+  function convertSides() {
+    const sidesArray = JSON.parse(relatedSides);
+
+    let convertedSides = [];
+
+    sidesArray.filter((side) => {
+      convertedSides.push({
+        name: side.name,
+        price: side.price,
+        description: side.description,
+        imageName: side.imageName,
+        imagePath: "http://localhost:3000/images/" + imageName
+      });
+    });
+
+    return convertedSides;
+  }
+
+  const convertedSides = convertSides();
   const convertedCategories = convertCats();
 
+  //constructs image object for main menu item image
   const imageObject = {
     name: imageName,
     imagePath: imagePath
   };
 
   //checks for if new item conflicts with existing ones
-  function checkDuplicate() {
+  function hasDuplicate() {
     return menu.some((item) => item.name === name);
   }
 
   // if no duplicates new menu item is added
-  if (!checkDuplicate()) {
+  if (!hasDuplicate()) {
     const newMenuItem = {
       name: name,
       price: price,
@@ -134,12 +160,11 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
 
     // checks for duplicate sides before adding them to the main sides menu
     menu[menu.length - 1].relatedSides.filter((option) => {
-      function checkDuplicates() {
+      function hasDuplicate() {
         return sidesmenu.some((item) => item.name === option.name);
       }
 
-      if (checkDuplicates()) {
-      } else {
+      if (!hasDuplicate()) {
         sidesmenu.push(option);
       }
     });
@@ -147,14 +172,13 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
     // checks for duplicates in main addons menu and pushes new addons in if duplicates don't exist
     if (addonmenu.length !== 0) {
       convertedAddons.filter((addOnItem) => {
-        function checkDuplicates() {
+        function hasDuplicate() {
           return addonmenu.some(
             (item) => item.addonname === addOnItem.addonname
           );
         }
 
-        if (checkDuplicates()) {
-        } else {
+        if (!hasDuplicate()) {
           addonmenu.push(addOnItem);
         }
       });
@@ -169,7 +193,7 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
     } catch (error) {
       res.status(400).json(error);
     }
-  } else if (checkDuplicate()) {
+  } else if (hasDuplicate()) {
     res.status(400).json("Item Already Exists");
   }
 });
@@ -695,7 +719,7 @@ router.get("/randomorder", async (req, res) => {
     // console.log(randommenuOption)
 
     // will check to see if the random menue option is a duplicate of any options already in the random order result
-    function checkDuplicates() {
+    function hasDuplicates() {
       let duplicate = "";
       let itemName = randommenuOption.name;
       // console.log(itemName)
@@ -709,12 +733,12 @@ router.get("/randomorder", async (req, res) => {
       return duplicate;
     }
 
-    let checkduplicate = checkDuplicates();
+    let hasduplicate = hasDuplicates();
 
     // will break the loop if its been running for longer than 4 seconds and hasnt filled the number of heads requirement
     if (currentTime - startingTime >= timeTocancel) break;
 
-    if (checkduplicate === "duplicate") {
+    if (hasduplicate === "duplicate") {
       // console.log("Found Duplicate")
     } else {
       randomOrder.push(randommenuOption);
@@ -966,7 +990,7 @@ async function checkForOrder(inputs) {
   }
 }
 
-// function checkDuplicates(array, compareItem, ) {
+// function hasDuplicates(array, compareItem, ) {
 //   return array.some((item) => {
 //     item.name === option.name;
 //   });

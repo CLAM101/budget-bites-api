@@ -25,8 +25,11 @@ const sideItemSchema = new mongoose.Schema({
   description: {
     type: String
   },
-  image: {
-    image: imageSchema
+  imageName: {
+    type: String
+  },
+  imagePath: {
+    type: String
   }
 });
 
