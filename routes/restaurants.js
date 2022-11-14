@@ -3,15 +3,10 @@ const router = express.Router();
 const Restaurant = require("../models/restaurant");
 const Subscriber = require("../models/subscriber");
 const passport = require("passport");
-const randomRest = require("randomrestgenerator");
 const LocalStrategy = require("passport-local");
 const Order = require("../models/order");
-const { trusted } = require("mongoose");
 const storage = require("../helpers/storage");
-const { eventNames } = require("../models/restaurant");
 const Applicant = require("../models/applicant");
-const { toNamespacedPath } = require("path");
-const { constants } = require("buffer");
 
 // passport strategy for restaurants
 passport.use("restlocal", new LocalStrategy(Restaurant.authenticate()));
@@ -65,12 +60,6 @@ router.get("/getmenu", async function (req, res, next) {
 });
 
 router.post("/addmenuitem", storage, async function (req, res, next) {
-  console.log(
-    "request body",
-    req.body.relatedSides,
-    "request files",
-    req.files
-  );
   // all new menu item detail from client request
   const {
     name,
@@ -110,21 +99,18 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
 
     let convertedSides = [];
 
-    sidesArray.filter((side) => {
+    sidesArray.forEach((side) => {
       convertedSides.push({
         name: side.name,
         price: side.price,
         description: side.description,
         imageName: side.imageName,
-        imagePath: "http://localhost:3000/images/" + imageName
+        imagePath: "http://localhost:3000/images/" + side.imageName
       });
     });
 
     return convertedSides;
   }
-
-  const convertedSides = convertSides();
-  const convertedCategories = convertCats();
 
   //constructs image object for main menu item image
   const imageObject = {
@@ -137,17 +123,16 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
     return menu.some((item) => item.name === name);
   }
 
-  // if no duplicates new menu item is added
   if (!hasDuplicate()) {
     const newMenuItem = {
       name: name,
       price: price,
       description: description,
-      categories: convertedCategories,
+      categories: convertCats(),
       rating: 5,
       restaurantname: req.user.title,
       image: imageObject,
-      relatedSides: convertedSides,
+      relatedSides: convertSides(),
       addons: convertedAddons,
       itemType: itemType
     };
@@ -170,7 +155,7 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
     });
 
     // checks for duplicates in main addons menu and pushes new addons in if duplicates don't exist
-    if (addonmenu.length !== 0) {
+    if (addonmenu.length) {
       convertedAddons.filter((addOnItem) => {
         function hasDuplicate() {
           return addonmenu.some(
@@ -187,7 +172,6 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
     }
 
     try {
-      console.log("restaurant save fired");
       const updatedRest = await rest.save();
       res.status(201).json(updatedRest);
     } catch (error) {

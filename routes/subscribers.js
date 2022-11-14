@@ -7,9 +7,7 @@ const Order = require("../models/order");
 const bodyParser = require("body-parser");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const facebookStrategy = require("passport-facebook").Strategy;
-const stripe = require("stripe")(
-  "sk_test_51LHhW8LRP6Gx7e16fmd1i0mP8HN53ueorPvcttySNxYMs1uy4cGLKiGI9ZLV79ePJPwvZaqLPiwpgetH4CZwMarx00ktNp8w1B"
-);
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 const LocalStrategy = require("passport-local");
