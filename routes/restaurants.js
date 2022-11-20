@@ -97,16 +97,14 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
   function convertSides() {
     const sidesArray = JSON.parse(relatedSides);
 
-    let convertedSides = [];
-
-    sidesArray.forEach((side) => {
-      convertedSides.push({
+    let convertedSides = sidesArray.map((side) => {
+      return {
         name: side.name,
         price: side.price,
         description: side.description,
         imageName: side.imageName,
         imagePath: "http://localhost:3000/images/" + side.imageName
-      });
+      };
     });
 
     return convertedSides;
@@ -173,12 +171,18 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
 
     try {
       const updatedRest = await rest.save();
-      res.status(201).json(updatedRest);
+      res
+        .status(200)
+        .json({
+          rest: updatedRest,
+          status: 200,
+          message: "Successfully added menu item"
+        });
     } catch (error) {
-      res.status(400).json(error);
+      res.json({ status: 400, error: error });
     }
   } else if (hasDuplicate()) {
-    res.status(400).json("Item Already Exists");
+    res.json({ status: 401, message: "item already exists" });
   }
 });
 
@@ -703,35 +707,22 @@ router.get("/randomorder", async (req, res) => {
     // console.log(randommenuOption)
 
     // will check to see if the random menue option is a duplicate of any options already in the random order result
-    function hasDuplicates() {
-      let duplicate = "";
-      let itemName = randommenuOption.name;
-      // console.log(itemName)
-      for (let i = 0; i < randomOrder.length; i++) {
-        if (itemName === randomOrder[i].name) {
-          duplicate = "duplicate";
-        }
-        // console.log("loop running")
-      }
-      // console.log(randomOrder)
-      return duplicate;
-    }
 
-    let hasduplicate = hasDuplicates();
+    function hasDuplicate() {
+      let itemName = randommenuOption.name;
+
+      return randomOrder.some((item) => item.name === itemName);
+    }
 
     // will break the loop if its been running for longer than 4 seconds and hasnt filled the number of heads requirement
     if (currentTime - startingTime >= timeTocancel) break;
 
-    if (hasduplicate === "duplicate") {
-      // console.log("Found Duplicate")
-    } else {
+    if (!hasDuplicate()) {
       randomOrder.push(randommenuOption);
     }
     randomOrder.length;
-    // console.log(randommenuOption)
   }
 
-  // console.log(spendPerHead)
   try {
     res.status(201).send({
       randomOrder
