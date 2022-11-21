@@ -59,6 +59,118 @@ router.get("/getmenu", async function (req, res, next) {
   }
 });
 
+router.patch("/editmenuitem", storage, async function (req, res, next) {
+  const {
+    name,
+    price,
+    description,
+    categories,
+    imageName,
+    relatedSides,
+    addons,
+    itemType,
+    itemId
+  } = req.body;
+
+  const rest = await Restaurant.findById(req.user._id, function (err, docs) {
+    if (err) {
+      console.log(err);
+    } else {
+    }
+  }).clone();
+
+  let restMenu = rest.menu;
+
+  let foundItem = restMenu.find((item) => {
+    return item.id === itemId;
+  });
+
+  if (name) {
+    foundItem.name = name;
+  }
+
+  if (price) {
+    foundItem.price = price;
+  }
+  if (description) {
+    foundItem.description = description;
+  }
+  if (categories) {
+  }
+  if (imageName) {
+    const imagePath = "http://localhost:3000/images/" + imageName;
+
+    const imageObject = {
+      name: imageName,
+      imagePath: imagePath
+    };
+
+    foundItem.image = imageObject;
+  }
+  if (relatedSides) {
+    relatedSides.forEach((side) => {
+      if (side.id) {
+        let relevantSideInRelatedSidesMenuIndex =
+          foundItem.relatedSides.findIndex((x) => x.id === side.id);
+
+        let relevantSideInSidesMenuIndex = rest.sidesmenu.findIndex(
+          (x) => x.id === side.id
+        );
+
+        const imagePath = "http://localhost:3000/images/" + side.imageName;
+        let relevantSideInRelated = {
+          name: side.name,
+          price: side.price,
+          description: side.description,
+          imageName: side.imageName,
+          imagePath: imagePath,
+          _id: side.id
+        };
+
+        foundItem.relatedSides[relevantSideInRelatedSidesMenuIndex] =
+          relevantSideInRelated;
+
+        let relevantSideInSidesMenu = {
+          name: side.name,
+          price: side.price,
+          description: side.description,
+          imageName: side.imageName,
+          imagePath: imagePath,
+          _id: side.id
+        };
+
+        rest.sidesmenu[relevantSideInSidesMenuIndex] = relevantSideInSidesMenu;
+      } else if (!side.id) {
+        rest.sidesmenu.push(side);
+        let sideToAdd = rest.sidesmenu.find(
+          (addedSide) => addedSide.name === side.name
+        );
+
+        foundItem.relatedSides.push(sideToAdd);
+      }
+    });
+  }
+  if (addons) {
+    // addons edits still to be added
+  }
+  if (itemType) {
+    // still to add duplicate checks
+    foundItem.itemType = itemType;
+  }
+
+  try {
+    const updatedRest = await rest.save();
+    console.log("updated rest", updatedRest);
+    res.json({
+      status: 200,
+      updatedRest: updatedRest,
+      message: "successfully updated restaurant"
+    });
+  } catch (error) {
+    res.json({ error: error, status: 400 });
+  }
+});
+
 router.post("/addmenuitem", storage, async function (req, res, next) {
   // all new menu item detail from client request
   const {
@@ -130,8 +242,8 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
       rating: 5,
       restaurantname: req.user.title,
       image: imageObject,
-      relatedSides: convertSides(),
-      addons: convertedAddons,
+      relatedSides: [],
+      addons: [],
       itemType: itemType
     };
 
@@ -139,20 +251,38 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
       itemTypes.push(itemType);
     }
 
-    menu.push(newMenuItem);
-
-    // checks for duplicate sides before adding them to the main sides menu
-    menu[menu.length - 1].relatedSides.filter((option) => {
+    // if duplicate sides exists in sides menu that side will just be added to related sides of new menu item,
+    //if no duplicate is added to main sides menu and then pushed into related sides array of new menu item
+    //this is done to have the same object id in related sides and sides menu arrays
+    convertSides().filter((option) => {
+      console.log("option in related sides filter", option);
       function hasDuplicate() {
         return sidesmenu.some((item) => item.name === option.name);
       }
 
       if (!hasDuplicate()) {
         sidesmenu.push(option);
+
+        let newSide = sidesmenu.find(
+          (sideItem) => sideItem.name === option.name
+        );
+
+        console.log("name side", newSide);
+
+        newMenuItem.relatedSides.push(newSide);
+      } else if (hasDuplicate()) {
+        let existingSide = sidesmenu.find(
+          (sideItem) => sideItem.name === option.name
+        );
+
+        newMenuItem.relatedSides.push(existingSide);
       }
     });
 
-    // checks for duplicates in main addons menu and pushes new addons in if duplicates don't exist
+    // checks for duplicates in main addons menu, if no duplicate found the addon will be pushed into main addons array then that new addon will be found and pushed to the new menu item addons array
+    //if duplicate found the existing addon will be found and added to just the new menu items addons array
+    //if no addons exist in both the new addons are added to the addomenu and then the addonmenu array will be pushed into the new menu items addons array
+    //this is to persist object IDs across addons arrays
     if (addonmenu.length) {
       convertedAddons.filter((addOnItem) => {
         function hasDuplicate() {
@@ -163,21 +293,32 @@ router.post("/addmenuitem", storage, async function (req, res, next) {
 
         if (!hasDuplicate()) {
           addonmenu.push(addOnItem);
+          let newAddon = addonmenu.find(
+            (addonMenuItem) => addOnItem.name === addonMenuItem.name
+          );
+          newMenuItem.addons.push(newAddon);
+        } else if (hasDuplicate()) {
+          let existingAddon = addonmenu.find(
+            (addonMenuItem) => addOnItem.name === addonMenuItem.name
+          );
+
+          newMenuItem.addons.push(existingAddon);
         }
       });
     } else {
       addonmenu.push(...convertedAddons);
+      newMenuItem.addons.push(...addonmenu);
     }
+
+    menu.push(newMenuItem);
 
     try {
       const updatedRest = await rest.save();
-      res
-        .status(200)
-        .json({
-          rest: updatedRest,
-          status: 200,
-          message: "Successfully added menu item"
-        });
+      res.status(200).json({
+        rest: updatedRest,
+        status: 200,
+        message: "Successfully added menu item"
+      });
     } catch (error) {
       res.json({ status: 400, error: error });
     }
